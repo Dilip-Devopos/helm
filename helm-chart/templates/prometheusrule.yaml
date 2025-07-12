@@ -1,0 +1,37 @@
+{{- if and .Values.monitoring.enabled .Values.monitoring.prometheusRule.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ .Values.app.name }}-rules
+  namespace: {{ .Values.namespace.name }}
+spec:
+  groups:
+  - name: {{ .Values.app.name }}.rules
+    rules:
+    - alert: HighErrorRate
+      expr: rate(nginx_http_requests_total{status=~"5.."}[5m]) > 0.1
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "High error rate detected"
+        description: "Error rate is above 10% for {{ .Values.app.name }}"
+    
+    - alert: HighMemoryUsage
+      expr: container_memory_usage_bytes{pod=~"{{ .Values.app.name }}-.*"} / container_spec_memory_limit_bytes > 0.8
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "High memory usage"
+        description: "Memory usage is above 80% for {{ .Values.app.name }}"
+    
+    - alert: HighCPUUsage
+      expr: rate(container_cpu_usage_seconds_total{pod=~"{{ .Values.app.name }}-.*"}[5m]) > 0.8
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "High CPU usage"
+        description: "CPU usage is above 80% for {{ .Values.app.name }}"
+{{- end }}

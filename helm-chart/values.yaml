@@ -1,0 +1,256 @@
+# Global configuration
+global:
+  imageRegistry: ""
+  imagePullSecrets: []
+
+# Application configuration
+app:
+  name: frontend-app
+  version: "1.0.0"
+  replicas: 3
+  
+image:
+  repository: frontend-app
+  tag: "latest"
+  pullPolicy: IfNotPresent
+
+# Namespace configuration
+namespace:
+  create: true
+  name: frontend-app
+  labels:
+    environment: production
+    team: frontend
+  annotations:
+    description: "Frontend application namespace"
+
+# Service configuration
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 80
+  name: frontend-service
+
+# Resource configuration
+resources:
+  requests:
+    memory: "128Mi"
+    cpu: "100m"
+  limits:
+    memory: "256Mi"
+    cpu: "200m"
+
+# Resource quota
+resourceQuota:
+  enabled: true
+  hard:
+    requests.cpu: "2"
+    requests.memory: "4Gi"
+    limits.cpu: "4"
+    limits.memory: "8Gi"
+    persistentvolumeclaims: "10"
+    pods: "10"
+    services: "5"
+
+# HPA configuration
+hpa:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+# Security Context
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 2000
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+
+# Pod Security Context
+podSecurityContext:
+  seccompProfile:
+    type: RuntimeDefault
+
+# RBAC configuration
+rbac:
+  create: true
+  serviceAccount:
+    create: true
+    name: frontend-app-sa
+    annotations: {}
+    automountServiceAccountToken: false
+
+# Network Policy
+networkPolicy:
+  enabled: true
+  ingress:
+    enabled: true
+    allowedNamespaces:
+      - istio-system
+      - monitoring
+    allowedPorts:
+      - 80
+      - 15090  # Istio sidecar
+  egress:
+    enabled: true
+    allowedNamespaces:
+      - kube-system
+      - istio-system
+      - monitoring
+    allowedPorts:
+      - 53    # DNS
+      - 443   # HTTPS
+      - 80    # HTTP
+
+# Ingress configuration
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+  hosts:
+    - host: frontend.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: frontend-tls
+      hosts:
+        - frontend.example.com
+
+# Istio Service Mesh
+istio:
+  enabled: true
+  injection: enabled
+  virtualService:
+    enabled: true
+    gateways:
+      - istio-system/frontend-gateway
+    hosts:
+      - frontend.example.com
+    http:
+      - match:
+          - uri:
+              prefix: /
+        route:
+          - destination:
+              host: frontend-service
+              port:
+                number: 80
+  gateway:
+    enabled: true
+    hosts:
+      - frontend.example.com
+    tls:
+      mode: SIMPLE
+      credentialName: frontend-tls
+  destinationRule:
+    enabled: true
+    trafficPolicy:
+      connectionPool:
+        tcp:
+          maxConnections: 100
+        http:
+          http1MaxPendingRequests: 50
+          maxRequestsPerConnection: 10
+      loadBalancer:
+        simple: LEAST_CONN
+      outlierDetection:
+        consecutiveErrors: 3
+        interval: 30s
+        baseEjectionTime: 30s
+
+# Monitoring
+monitoring:
+  enabled: true
+  serviceMonitor:
+    enabled: true
+    interval: 30s
+    path: /metrics
+  prometheusRule:
+    enabled: true
+
+# Prometheus configuration
+prometheus:
+  enabled: true
+  server:
+    persistentVolume:
+      enabled: true
+      size: 50Gi
+    resources:
+      requests:
+        memory: "2Gi"
+        cpu: "1000m"
+      limits:
+        memory: "4Gi"
+        cpu: "2000m"
+  nodeExporter:
+    enabled: true
+  kubeStateMetrics:
+    enabled: true
+  alertmanager:
+    enabled: true
+
+# Grafana configuration
+grafana:
+  enabled: true
+  adminPassword: "admin123!"
+  persistence:
+    enabled: true
+    size: 10Gi
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "100m"
+    limits:
+      memory: "256Mi"
+      cpu: "200m"
+  datasources:
+    datasources.yaml:
+      apiVersion: 1
+      datasources:
+        - name: Prometheus
+          type: prometheus
+          url: http://prometheus-server:80
+          access: proxy
+          isDefault: true
+  dashboardProviders:
+    dashboardproviders.yaml:
+      apiVersion: 1
+      providers:
+        - name: 'default'
+          orgId: 1
+          folder: ''
+          type: file
+          disableDeletion: false
+          editable: true
+          options:
+            path: /var/lib/grafana/dashboards
+
+# Health checks
+healthChecks:
+  readinessProbe:
+    httpGet:
+      path: /health
+      port: 80
+    initialDelaySeconds: 10
+    periodSeconds: 5
+  livenessProbe:
+    httpGet:
+      path: /health
+      port: 80
+    initialDelaySeconds: 30
+    periodSeconds: 10
+
+# Pod Disruption Budget
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 2

@@ -1,0 +1,22 @@
+{{- if and .Values.istio.enabled .Values.istio.destinationRule.enabled }}
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: {{ .Values.app.name }}-dr
+  namespace: {{ .Values.namespace.name }}
+spec:
+  host: {{ .Values.service.name }}
+  trafficPolicy:
+    connectionPool:
+      tcp:
+        maxConnections: {{ .Values.istio.destinationRule.trafficPolicy.connectionPool.tcp.maxConnections }}
+      http:
+        http1MaxPendingRequests: {{ .Values.istio.destinationRule.trafficPolicy.connectionPool.http.http1MaxPendingRequests }}
+        maxRequestsPerConnection: {{ .Values.istio.destinationRule.trafficPolicy.connectionPool.http.maxRequestsPerConnection }}
+    loadBalancer:
+      simple: {{ .Values.istio.destinationRule.trafficPolicy.loadBalancer.simple }}
+    outlierDetection:
+      consecutiveErrors: {{ .Values.istio.destinationRule.trafficPolicy.outlierDetection.consecutiveErrors }}
+      interval: {{ .Values.istio.destinationRule.trafficPolicy.outlierDetection.interval }}
+      baseEjectionTime: {{ .Values.istio.destinationRule.trafficPolicy.outlierDetection.baseEjectionTime }}
+{{- end }}
